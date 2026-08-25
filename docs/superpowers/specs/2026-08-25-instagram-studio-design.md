@@ -127,7 +127,7 @@ for three missed slots, one run publishes three posts. Runs are idempotent becau
 read from the log, not from launchd.
 
 ### `ig publish [--now <post-dir>] [--dry-run]`
-1. Refresh the token if `IG_TOKEN_EXPIRES_AT` is within 10 days (`GET graph.instagram.com/access_token?grant_type=ig_exchange_token` semantics per current docs; write the new token + expiry back to the env file).
+1. Refresh the token if `IG_TOKEN_EXPIRES_AT` is within 10 days: `GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=…` (long-lived to long-lived, only valid once the token is at least 24 h old); write the new token + expiry back to the env file.
 2. Compute candidates (`--now` bypasses the slot math for that one folder).
 3. For each candidate, sequentially:
    1. Validate (see `ig validate`). Invalid → `status: failed`, `error`, continue.
@@ -152,15 +152,17 @@ media combination is one of reel/photo/carousel; caption ≤ 2,200 chars and ≤
 ≤ 1 GB, ≤ 15 min, and (via `ffprobe` if present, else skipped with a warning) 9:16 within tolerance
 with an H.264/AAC stream; images are JPEG or PNG ≤ 8 MB. Prints a table; exit 1 if any invalid.
 
-### `ig token status|refresh`
-Shows expiry; `refresh` forces the exchange.
+### `ig token status|exchange|refresh`
+`status` shows expiry. `exchange <short-lived-token>` performs the one-time short-lived to long-lived
+exchange (`GET graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=…`) used by
+`/ig-setup`. `refresh` forces the long-lived refresh described under `ig publish`.
 
 ## Skills and commands
 
 - `/ig-setup` (skill `ig-setup`): guided one-time setup. Steps the user through creating a Meta app
   with the "Instagram API with Instagram Login" product, adding themselves as an Instagram Tester,
   and completing the Business Login flow in the browser. The user pastes the resulting short-lived
-  token; the skill runs `ig token refresh` to get the 60-day token, writes the env file, asks for the
+  token; the skill runs `ig token exchange <token>` to get the 60-day token, writes the env file, asks for the
   Vercel Blob token, writes `instagram/config.json` with the user's slots, installs
   `~/Library/LaunchAgents/com.jordanbrierley.instagram-studio.plist` (`StartCalendarInterval` for each
   slot, `RunAtLoad true`, `StartInterval 1800`, `StandardOutPath`/`StandardErrorPath` under
