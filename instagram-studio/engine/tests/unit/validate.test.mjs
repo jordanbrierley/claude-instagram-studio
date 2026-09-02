@@ -155,11 +155,25 @@ test("bad status, bad scheduledFor and a bad media combination all fail", async 
 });
 
 test("a post.json with no status is reported as status missing, by default too", async () => {
-  const rootDir = makeQueue({ "a/1": { media: ["asset.mp4"], caption: "hello" } }, { "a/1/asset.mp4": MP4 });
+  const rootDir = makeQueue(
+    { "a/1": { media: ["asset.mp4"], caption: "hello" }, "a/2": ready({ status: null }) },
+    { "a/1/asset.mp4": MP4, "a/2/asset.mp4": MP4 },
+  );
   const results = await validateAll(findPosts(rootDir), { probe: goodProbe });
-  assert.equal(results.length, 1);
+  assert.equal(results.length, 2);
   assert.equal(results[0].ok, false);
   assert.match(results[0].errors.join(" "), /status missing/);
+  assert.equal(results[1].ok, false);
+  assert.match(results[1].errors.join(" "), /status missing/);
+  rmSync(rootDir, { recursive: true, force: true });
+});
+
+test("a media path that escapes the post folder is rejected", async () => {
+  const rootDir = makeQueue({ "a/1": ready({ media: ["../outside.jpg"] }) });
+  const [entry] = findPosts(rootDir);
+  const result = await validatePost(entry, { probe: goodProbe });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(" "), /escapes the post folder/);
   rmSync(rootDir, { recursive: true, force: true });
 });
 

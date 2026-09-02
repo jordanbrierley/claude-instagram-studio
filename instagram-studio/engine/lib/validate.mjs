@@ -81,7 +81,7 @@ export async function validatePost(entry, { probe } = {}) {
   }
   const post = entry.post;
 
-  if (post.status === undefined || post.status === null) {
+  if (post.status == null) {
     errors.push(`status missing, add "status": "ready" to publish this post`);
   } else if (!STATUSES.includes(post.status)) {
     errors.push(`status must be one of ${STATUSES.join(", ")}, found "${post.status}"`);
@@ -107,6 +107,7 @@ export async function validatePost(entry, { probe } = {}) {
 
   for (const file of post.media) {
     const abs = path.resolve(entry.dir, file);
+    if (!abs.startsWith(entry.dir + path.sep)) { errors.push(`media ${file} escapes the post folder`); continue; }
     if (!existsSync(abs)) { errors.push(`media file ${file} not found`); continue; }
     const size = statSync(abs).size;
 
@@ -146,7 +147,7 @@ export async function validateAll(entries, { probe, statuses = ["ready"] } = {})
   // A post with no status is always reported: it is invisible to the publisher, and
   // silently skipping it here is how a queued post never goes out and nobody notices.
   const selected = statuses
-    ? entries.filter((e) => !e.post || e.post.status === undefined || statuses.includes(e.post.status))
+    ? entries.filter((e) => !e.post || e.post.status == null || statuses.includes(e.post.status))
     : entries;
   const results = [];
   for (const entry of selected) results.push(await validatePost(entry, { probe }));
