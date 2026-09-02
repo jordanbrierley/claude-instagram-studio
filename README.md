@@ -75,10 +75,12 @@ Any folder under `root` that contains a `post.json` is a post, and a post folder
 Under the hood everything is one CLI:
 
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" due
-    node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" validate
+    node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" validate [<post-dir>]
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" publish [--now <post-dir>] [--dry-run]
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" token status | exchange | refresh
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" launchd [--label <label>] [--log-dir <dir>] [--node <path>]
+
+Global options are `--repo <dir>` to specify the repo holding `instagram/config.json` (defaults to the nearest directory above the current directory containing it) and `--json` for machine-readable output on `due` and `validate`. Exit codes are 0 for success (per-post failures are recorded, not fatal), 1 when `validate` finds an invalid post, and 2 when the run cannot start (no repo, bad config, or missing secrets).
 
 `token exchange` takes no argument: it reads the short-lived token out of the secrets file and writes
 the long-lived one back, so no token is ever typed on a command line. `token status` prints the
