@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, appendFileSync, readdirSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -63,10 +63,12 @@ export function findPosts(rootDir) {
     // A folder with a post.json is a post, and a post is a leaf: drafts, archives
     // and working copies inside it are its own business, never separate posts.
     if (existsSync(jsonPath)) { found.push(readPost(jsonPath, rootDir)); return; }
-    for (const name of readdirSync(dir).sort()) {
-      if (name.startsWith(".") || name === "node_modules") continue;
-      const child = path.join(dir, name);
-      if (statSync(child).isDirectory()) walk(child);
+    // withFileTypes, not statSync per entry: a dangling symlink reports its own type
+    // here and is simply skipped, rather than statSync following it and throwing ENOENT.
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => compare(a.name, b.name));
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      if (entry.isDirectory()) walk(path.join(dir, entry.name));
     }
   };
   walk(rootDir);

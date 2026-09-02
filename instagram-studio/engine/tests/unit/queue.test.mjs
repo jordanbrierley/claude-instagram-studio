@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, appendFileSync, symlinkSync, rmSync } from "node:fs";
 import path from "node:path";
 import { findPosts, readLog, appendLog, writePost, slotsPassedToday, publishedToday, selectCandidates, zonedParts } from "../../lib/queue.mjs";
 import { makeQueue, ready } from "../helpers/tmp-repo.mjs";
@@ -143,6 +143,14 @@ test("a post folder is a leaf, so a nested post.json is not a second post", () =
   rmSync(rootDir, { recursive: true, force: true });
 });
 
+test("findPosts skips a dangling symlink instead of throwing", () => {
+  const rootDir = makeQueue({ "a/1": ready() });
+  symlinkSync("/nonexistent/target", path.join(rootDir, "dangling"));
+  const posts = findPosts(rootDir);
+  assert.deepEqual(posts.map((p) => p.rel), ["a/1"]);
+  rmSync(rootDir, { recursive: true, force: true });
+});
+
 test("writePost merges and preserves unknown keys", () => {
   const rootDir = makeQueue({ "a/1": { ...ready(), notes: "keep me" } });
   const jsonPath = path.join(rootDir, "a/1/post.json");
@@ -158,9 +166,11 @@ test("the log appends one JSON object per line and skips corrupt lines on read",
   const rootDir = makeQueue({});
   const logPath = path.join(rootDir, "instagram", "log.jsonl");
   appendLog(logPath, { ts: "2026-09-02T08:31:00+01:00", result: "posted" });
+  appendFileSync(logPath, "not json\n");
   appendLog(logPath, { ts: "2026-09-02T12:31:00+01:00", result: "failed" });
   const entries = readLog(logPath);
   assert.equal(entries.length, 2);
+  assert.deepEqual(entries.map((e) => e.result), ["posted", "failed"]);
   assert.equal(readLog(path.join(rootDir, "nope.jsonl")).length, 0);
   rmSync(rootDir, { recursive: true, force: true });
 });
