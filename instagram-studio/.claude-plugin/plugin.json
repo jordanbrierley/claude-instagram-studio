@@ -1,0 +1,5 @@
+{
+  "name": "instagram-studio",
+  "description": "Post to Instagram from a queue, unattended. Drop a post.json next to your media, and a local scheduled job publishes reels, photos and carousels at your daily slots. Ships the engine and the know-how, your project keeps only content.",
+  "author": { "name": "Jordan Brierley" }
+}
