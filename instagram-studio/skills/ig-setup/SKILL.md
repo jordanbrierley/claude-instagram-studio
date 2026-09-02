@@ -108,7 +108,7 @@ Add `instagram/log.jsonl` to the repo `.gitignore`.
 ## Stage 5: the scheduler
 
 ```bash
-node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" launchd --repo "$PWD" > ~/Library/LaunchAgents/com.jordanbrierley.instagram-studio.plist
+node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" launchd --repo "$PWD" > /tmp/ig-launchd.plist && mv /tmp/ig-launchd.plist ~/Library/LaunchAgents/com.jordanbrierley.instagram-studio.plist
 mkdir -p ~/Library/Logs/instagram-studio
 launchctl unload ~/Library/LaunchAgents/com.jordanbrierley.instagram-studio.plist 2>/dev/null
 launchctl load ~/Library/LaunchAgents/com.jordanbrierley.instagram-studio.plist

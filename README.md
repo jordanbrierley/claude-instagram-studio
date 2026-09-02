@@ -80,6 +80,11 @@ Under the hood everything is one CLI:
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" token status | exchange | refresh
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" launchd [--label <label>] [--log-dir <dir>] [--node <path>]
 
+`${CLAUDE_PLUGIN_DATA}` is set inside Claude Code sessions and hooks, not in a login shell, so these
+lines expand to `/engine/ig.mjs` and fail if pasted straight into a plain terminal. Run `due` from
+inside Claude Code first; its output starts with `engine: <path>`, the real absolute path to use
+from a terminal.
+
 Global options are `--repo <dir>` to specify the repo holding `instagram/config.json` (defaults to the nearest directory above the current directory containing it) and `--json` for machine-readable output on `due` and `validate`. Exit codes are 0 for success (per-post failures are recorded, not fatal), 1 when `validate` finds an invalid post, and 2 when the run cannot start (no repo, bad config, or missing secrets).
 
 `token exchange` takes no argument: it reads the short-lived token out of the secrets file and writes
