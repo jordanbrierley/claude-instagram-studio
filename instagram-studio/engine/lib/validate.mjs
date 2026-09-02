@@ -46,7 +46,12 @@ export function makeFfprobe(execFileImpl = execFile) {
     const unreadable = (why) => reject(new Error(`ffprobe could not read ${path.basename(file)}: ${why}`));
     execFileImpl("ffprobe", ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", file], (err, stdout) => {
       if (err && err.code === "ENOENT") return resolve(null); // ffprobe is not on PATH
-      if (err) return unreadable(String(err.message ?? err).split("\n")[0]);
+      if (err) {
+        let why = "unknown error";
+        if (typeof err.code === "number") why = `exit ${err.code}`;
+        else if (err.signal) why = `signal ${err.signal}`;
+        return unreadable(why);
+      }
       try {
         const data = JSON.parse(stdout);
         const video = (data.streams ?? []).find((s) => s.codec_type === "video");

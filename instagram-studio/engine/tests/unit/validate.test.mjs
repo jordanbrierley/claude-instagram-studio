@@ -105,6 +105,15 @@ test("makeFfprobe returns null for a missing ffprobe and rejects when ffprobe fa
 
   const garbage = makeFfprobe((cmd, args, cb) => cb(null, "not json"));
   await assert.rejects(() => garbage("/tmp/asset.mp4"), /ffprobe could not read asset\.mp4/);
+
+  const pathLeak = makeFfprobe((cmd, args, cb) => cb(Object.assign(new Error("Command failed: ffprobe -v error /private/tmp/secret-dir/asset.mp4"), { code: 1 })));
+  try {
+    await pathLeak("/tmp/asset.mp4");
+    throw new Error("should have rejected");
+  } catch (err) {
+    assert.match(err.message, /ffprobe could not read asset\.mp4/);
+    assert(!err.message.includes("secret-dir"), "path should not leak into error message");
+  }
 });
 
 test("images must really be JPEG or PNG and within the size limit", async () => {
