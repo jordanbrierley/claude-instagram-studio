@@ -112,6 +112,41 @@ test("token exchange and refresh return the token and an exact expiry from the i
   assert.equal(fake.calls[1].params.grant_type, "ig_refresh_token");
 });
 
+test("a non-JSON error body redacts the access token from the thrown message", async () => {
+  const LEAKY_TOKEN = "leaky-token-do-not-print";
+  const fetchImpl = async (url) => ({
+    ok: false,
+    status: 502,
+    text: async () => `<html><body>Bad gateway for ${url}</body></html>`,
+  });
+  const c = createGraphClient({ fetch: fetchImpl, userId: "17841400000000000", accessToken: LEAKY_TOKEN, sleep: noSleep });
+  await assert.rejects(
+    () => c.getPermalink("media-1"),
+    (err) => {
+      assert.equal(err.message.includes(LEAKY_TOKEN), false);
+      assert.match(err.message, /\[redacted\]/);
+      return true;
+    },
+  );
+});
+
+test("exchangeToken redacts the client secret from a non-JSON error body too", async () => {
+  const APP_SECRET = "leaky-app-secret-do-not-print";
+  const fetchImpl = async (url) => ({
+    ok: false,
+    status: 502,
+    text: async () => `<html><body>Bad gateway for ${url}</body></html>`,
+  });
+  await assert.rejects(
+    () => exchangeToken({ fetch: fetchImpl, appSecret: APP_SECRET, shortLivedToken: "short-tok", now: () => 0 }),
+    (err) => {
+      assert.equal(err.message.includes(APP_SECRET), false);
+      assert.match(err.message, /\[redacted\]/);
+      return true;
+    },
+  );
+});
+
 test("needsRefresh fires inside the 10 day window and on a missing or unparseable expiry", () => {
   const now = new Date("2026-09-02T12:00:00Z");
   assert.equal(needsRefresh("2026-11-01T12:00:00Z", now), false);

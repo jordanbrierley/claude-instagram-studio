@@ -26,7 +26,12 @@ async function request({ fetchImpl, baseUrl, method, pathname, params }) {
   let body = null;
   try { body = JSON.parse(text); } catch { body = null; }
   if (!response.ok || !body || body.error) {
-    const message = body?.error?.message ?? text.slice(0, 300);
+    // A non-JSON error body (a proxy's HTML page, say) can echo the request URL back,
+    // and GET requests and token calls carry access_token / client_secret in that URL.
+    // Redact every secret value before it can reach an error message.
+    const secrets = [params.access_token, params.client_secret].filter(Boolean);
+    const redact = (s) => secrets.reduce((t, v) => t.split(v).join("[redacted]"), s);
+    const message = body?.error?.message ?? redact(text.slice(0, 300));
     throw new Error(`Instagram API ${method} ${pathname} failed (${response.status}): ${message}`);
   }
   return body;
