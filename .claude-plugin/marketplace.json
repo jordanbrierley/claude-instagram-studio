@@ -1,0 +1,13 @@
+{
+  "name": "jordanbrierley-instagram",
+  "owner": { "name": "Jordan Brierley" },
+  "plugins": [
+    {
+      "name": "instagram-studio",
+      "source": "./instagram-studio",
+      "description": "Unattended Instagram posting from a queue of post.json folders: reels, photos and carousels via the Instagram Graph API, media hosted on Vercel Blob, scheduled by a local launchd job.",
+      "keywords": ["instagram", "reels", "publishing", "scheduling", "graph-api"]
+    }
+  ],
+  "metadata": { "description": "Jordan Brierley's Claude Code plugins" }
+}
