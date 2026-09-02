@@ -41,7 +41,6 @@ export async function publishOne(entry, deps) {
       }
     } catch (err) {
       onEvent({ type: "io-error", rel: entry.rel, path: entry.jsonPath, message: err.message });
-      return outcome;
     }
     try {
       appendLogFn(logPath, { ts, postDir: entry.rel, kind, result, pinned: isPinned(entry), mediaId, url, error });
@@ -110,10 +109,14 @@ export async function runPublish({ candidates, deps }) {
     if (recent >= RATE_LIMIT) {
       const message = `${recent} posts in the last 24 hours, the Instagram limit is ${RATE_LIMIT}`;
       onEvent({ type: "rate-limit-guard", rel: entry.rel, posted: recent, message });
-      appendLogFn(deps.logPath, {
-        ts: now().toISOString(), postDir: entry.rel, kind: null,
-        result: "skipped-rate-limit", pinned: isPinned(entry), mediaId: null, url: null, error: message,
-      });
+      try {
+        appendLogFn(deps.logPath, {
+          ts: now().toISOString(), postDir: entry.rel, kind: null,
+          result: "skipped-rate-limit", pinned: isPinned(entry), mediaId: null, url: null, error: message,
+        });
+      } catch (err) {
+        onEvent({ type: "io-error", rel: entry.rel, path: deps.logPath, message: err.message });
+      }
       break; // the rest of the queue stays ready and goes out on the next run
     }
     if (index > 0) await deps.sleep(spacingMs);

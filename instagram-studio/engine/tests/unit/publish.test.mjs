@@ -170,6 +170,48 @@ test("an unwritable post.json is an io-error event, not a dead run", async () =>
   rmSync(rootDir, { recursive: true, force: true });
 });
 
+test("publishOne still logs a posted line when post.json cannot be written back", async () => {
+  const rootDir = makeQueue({ "a/1": ready() }, { "a/1/asset.mp4": MP4 });
+  const [entry] = findPosts(rootDir);
+  const events = [];
+  const { deps } = harness(rootDir);
+  // Point the write-back at the post directory itself: writing there throws EISDIR.
+  const unwritable = { ...entry, jsonPath: entry.dir };
+
+  const result = await publishOne(unwritable, { ...deps, onEvent: (e) => events.push(e) });
+  assert.equal(result.result, "posted");
+  assert.equal(events.filter((e) => e.type === "io-error").length, 1);
+  assert.equal(events.find((e) => e.type === "io-error").path, entry.dir);
+
+  const log = readLog(deps.logPath);
+  assert.equal(log.length, 1);
+  assert.equal(log[0].result, "posted");
+  assert.equal(log[0].postDir, unwritable.rel);
+  rmSync(rootDir, { recursive: true, force: true });
+});
+
+test("an unwritable log at the rate-limit guard is an io-error, not a crash", async () => {
+  const rootDir = makeQueue({ "a/1": ready(), "a/2": ready() }, { "a/1/asset.mp4": MP4, "a/2/asset.mp4": MP4 });
+  const candidates = findPosts(rootDir);
+  const events = [];
+  const { deps, fakeBlob } = harness(rootDir);
+  for (let i = 0; i < RATE_LIMIT; i += 1) {
+    appendLog(deps.logPath, { ts: "2026-09-02T02:00:00+01:00", postDir: `old/${i}`, kind: "photo", result: "posted", pinned: false });
+  }
+  const failingAppend = () => { throw new Error("disk full"); };
+
+  const results = await runPublish({
+    candidates,
+    deps: { ...deps, appendLogFn: failingAppend, onEvent: (e) => events.push(e) },
+  });
+  assert.deepEqual(results, []);
+  assert.equal(fakeBlob.uploads.length, 0);
+  assert.equal(events.filter((e) => e.type === "rate-limit-guard").length, 1);
+  assert.equal(events.filter((e) => e.type === "io-error").length, 1);
+  assert.equal(events.find((e) => e.type === "io-error").path, deps.logPath);
+  rmSync(rootDir, { recursive: true, force: true });
+});
+
 test("25 posts in the trailing 24 hours stops the run and leaves the queue ready", async () => {
   const rootDir = makeQueue({ "a/1": ready(), "a/2": ready() }, { "a/1/asset.mp4": MP4, "a/2/asset.mp4": MP4 });
   const candidates = findPosts(rootDir);
