@@ -1,0 +1,12 @@
+{
+  "name": "instagram-studio-engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22.18.0" },
+  "dependencies": {},
+  "scripts": {
+    "test": "node --test \"tests/unit/**/*.test.mjs\"",
+    "test:integration": "node --test \"tests/integration/**/*.test.mjs\""
+  }
+}
