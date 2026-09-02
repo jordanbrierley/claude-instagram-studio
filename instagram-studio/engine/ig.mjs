@@ -122,15 +122,29 @@ async function cmdValidate(values, positionals, io) {
 }
 
 async function ensureToken(env, io) {
-  if (!needsRefresh(env.IG_TOKEN_EXPIRES_AT)) return env;
+  if (!needsRefresh(env.IG_TOKEN_EXPIRES_AT, io.now())) return env;
   try {
     const refreshed = await refreshToken({ accessToken: env.IG_ACCESS_TOKEN });
     return persistToken(refreshed, envPath(), io);
   } catch (err) {
-    const stillValid = env.IG_TOKEN_EXPIRES_AT && new Date(env.IG_TOKEN_EXPIRES_AT).getTime() > Date.now();
+    const stillValid = env.IG_TOKEN_EXPIRES_AT && new Date(env.IG_TOKEN_EXPIRES_AT).getTime() > io.now().getTime();
     if (stillValid) { io.error(`token refresh failed (${err.message}), continuing with the current token`); return env; }
     throw new RunError(`token refresh failed and the token has expired: ${err.message}. Run /ig-setup to re-authorise.`);
   }
+}
+
+// The default publish deps: a real graph client, a real @vercel/blob store, and the
+// clock the run was invoked with. io.makeDeps (Task I5's seam) replaces this whole
+// factory for a test, without changing what a normal run builds.
+async function defaultPublishDeps({ env, probe }, io) {
+  const { put, del } = await loadVercelBlob();
+  return {
+    graph: createGraphClient({ userId: env.IG_USER_ID, accessToken: env.IG_ACCESS_TOKEN }),
+    blob: createBlobStore({ put, del, token: env.BLOB_READ_WRITE_TOKEN }),
+    probe,
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: io.now,
+  };
 }
 
 async function cmdPublish(values, io) {
@@ -141,6 +155,14 @@ async function cmdPublish(values, io) {
   const candidates = values.now
     ? [resolvePostDir(values.now, repo)]
     : report(repo, now).candidates.map((c) => readPost(path.join(c.dir, "post.json"), repo.rootDir));
+
+  if (values.now) {
+    const [entry] = candidates;
+    const status = entry.post?.status ?? "missing";
+    if (status !== "ready") {
+      throw new RunError(`${entry.rel} has status "${status}", not "ready". Set its post.json status back to "ready" to publish it again.`);
+    }
+  }
 
   if (values["dry-run"]) {
     io.log(`dry run: ${candidates.length} post(s) would publish`);
@@ -157,14 +179,13 @@ async function cmdPublish(values, io) {
   needSecrets(env, PUBLISH_KEYS);
   env = await ensureToken(env, io);
 
-  const { put, del } = await loadVercelBlob();
+  const built = io.makeDeps
+    ? await io.makeDeps({ env, config: repo.config, logPath: repo.logPath, probe })
+    : await defaultPublishDeps({ env, probe }, io);
+
   const deps = {
-    graph: createGraphClient({ userId: env.IG_USER_ID, accessToken: env.IG_ACCESS_TOKEN }),
-    blob: createBlobStore({ put, del, token: env.BLOB_READ_WRITE_TOKEN }),
-    probe,
+    ...built,
     logPath: repo.logPath,
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    now: () => new Date(),
     onEvent: (event) => {
       if (event.type === "start") io.log(`publishing ${event.rel} (${event.kind})`);
       if (event.type === "posted") io.log(`  posted: ${event.url}`);

@@ -1,10 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { main } from "../../ig.mjs";
 import { makeRepo, ready } from "../helpers/tmp-repo.mjs";
+import { createGraphClient } from "../../lib/graph.mjs";
+import { createBlobStore } from "../../lib/blob.mjs";
+import { readLog } from "../../lib/queue.mjs";
+import { SPACING_MS } from "../../lib/publish.mjs";
+import { makeFakeGraph, noSleep } from "../helpers/fake-graph.mjs";
+import { makeFakeBlob } from "../helpers/fake-blob.mjs";
 
 // Photos, not reels: the CLI builds a real `makeFfprobe()`, and a stub mp4 is an
 // error on any machine that has ffprobe installed (Task 5). An image needs no probe,
@@ -97,6 +103,23 @@ test("publish --now resolves one folder and dry runs just that post", async () =
   rmSync(repo, { recursive: true, force: true });
 });
 
+test("publish --now on a post that is not ready fails before any secrets are read", async () => {
+  // No IG_ENV_FILE is set for this test: the status guard in cmdPublish runs before
+  // readEnv/needSecrets, so this fails on the status check alone, secrets file or not.
+  const repo = makeRepo(
+    { "2026-09-01/a": ready({ media: ["photo.jpg"], status: "posted" }) },
+    {},
+    { "2026-09-01/a/photo.jpg": JPEG },
+  );
+  const out = capture();
+  const code = await main(["publish", "--repo", repo, "--now", path.join(repo, "content", "2026-09-01", "a")], out.io);
+  assert.equal(code, 2);
+  assert.match(out.text(), /2026-09-01\/a/);
+  assert.match(out.text(), /posted/);
+  assert.match(out.text(), /ready/);
+  rmSync(repo, { recursive: true, force: true });
+});
+
 test("publish with no secrets file exits 2 with a clean ig-setup message, no stack trace", async () => {
   const repo = twoReady();
   const dir = mkdtempSync(path.join(os.tmpdir(), "ig-nosecrets-"));
@@ -161,6 +184,46 @@ test("ig launchd takes the node path from --node when it is given", async () => 
   const out = capture();
   assert.equal(await main(["launchd", "--repo", repo, "--node", "/opt/homebrew/bin/node"], out.io), 0);
   assert.match(out.text(), /<string>\/opt\/homebrew\/bin\/node<\/string>/);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+test("publish runs the real (non-dry-run) path end to end through io.makeDeps", async () => {
+  const repo = twoReady();
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ig-publish-real-"));
+  const envFile = path.join(dir, "env");
+  writeFileSync(envFile, [
+    "IG_USER_ID=17841400000000000",
+    "IG_ACCESS_TOKEN=tok",
+    "BLOB_READ_WRITE_TOKEN=blob-tok",
+    "IG_TOKEN_EXPIRES_AT=2099-01-01T00:00:00.000Z", // far future: ensureToken never refreshes
+  ].join("\n") + "\n", { mode: 0o600 });
+  const previous = process.env.IG_ENV_FILE;
+  process.env.IG_ENV_FILE = envFile;
+
+  const fakeGraph = makeFakeGraph();
+  const fakeBlob = makeFakeBlob();
+  const slept = [];
+  const out = capture();
+  out.io.makeDeps = async ({ env, probe }) => ({
+    graph: createGraphClient({ fetch: fakeGraph.fetchImpl, userId: env.IG_USER_ID, accessToken: env.IG_ACCESS_TOKEN, sleep: noSleep }),
+    blob: createBlobStore({ put: fakeBlob.put, del: fakeBlob.del, token: env.BLOB_READ_WRITE_TOKEN }),
+    probe,
+    sleep: async (ms) => { slept.push(ms); },
+    now: () => NOW,
+  });
+
+  const code = await main(["publish", "--repo", repo], out.io);
+  process.env.IG_ENV_FILE = previous;
+
+  assert.equal(code, 0);
+  const postA = JSON.parse(readFileSync(path.join(repo, "content", "2026-09-01", "a", "post.json"), "utf8"));
+  const postB = JSON.parse(readFileSync(path.join(repo, "content", "2026-09-02", "b", "post.json"), "utf8"));
+  assert.equal(postA.status, "posted");
+  assert.equal(postB.status, "posted");
+  assert.equal(readLog(path.join(repo, "instagram", "log.jsonl")).length, 2);
+  assert.deepEqual(slept, [SPACING_MS]);
+
+  rmSync(dir, { recursive: true, force: true });
   rmSync(repo, { recursive: true, force: true });
 });
 
