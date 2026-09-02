@@ -62,6 +62,12 @@ function persistToken({ accessToken, expiresAt }, envFile, io) {
   return merged;
 }
 
+// requireSecrets throws a plain Error; wrap it so a missing secret is a clean
+// RunError like every other controlled exit-2 case, not a raw stack trace.
+function needSecrets(env, keys) {
+  try { requireSecrets(env, keys); } catch (err) { throw new RunError(err.message); }
+}
+
 function report({ repoDir, config, rootDir, logPath }, now) {
   const posts = findPosts(rootDir);
   const selection = selectCandidates({ posts, config, now, log: readLog(logPath) });
@@ -148,7 +154,7 @@ async function cmdPublish(values, io) {
   if (candidates.length === 0) { io.log("nothing due."); return 0; }
 
   let env = readEnv(envPath());
-  requireSecrets(env, PUBLISH_KEYS);
+  needSecrets(env, PUBLISH_KEYS);
   env = await ensureToken(env, io);
 
   const { put, del } = await loadVercelBlob();
@@ -191,13 +197,13 @@ async function cmdToken(values, positionals, io) {
   if (action === "exchange") {
     // No argument by design: the short-lived token is read from the secrets file the
     // user wrote, so it never appears on a command line or in `ps`.
-    requireSecrets(env, EXCHANGE_KEYS);
+    needSecrets(env, EXCHANGE_KEYS);
     const result = await exchangeToken({ appSecret: env.IG_APP_SECRET, shortLivedToken: env.IG_ACCESS_TOKEN });
     persistToken(result, envPath(), io);
     return 0;
   }
   if (action === "refresh") {
-    requireSecrets(env, REFRESH_KEYS);
+    needSecrets(env, REFRESH_KEYS);
     const result = await refreshToken({ accessToken: env.IG_ACCESS_TOKEN });
     persistToken(result, envPath(), io);
     return 0;

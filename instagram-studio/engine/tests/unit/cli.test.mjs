@@ -97,6 +97,23 @@ test("publish --now resolves one folder and dry runs just that post", async () =
   rmSync(repo, { recursive: true, force: true });
 });
 
+test("publish with no secrets file exits 2 with a clean ig-setup message, no stack trace", async () => {
+  const repo = twoReady();
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ig-nosecrets-"));
+  const envFile = path.join(dir, "env"); // fresh dir, file itself does not exist
+  const previous = process.env.IG_ENV_FILE;
+  process.env.IG_ENV_FILE = envFile;
+  const out = capture();
+  const code = await main(["publish", "--repo", repo], out.io);
+  process.env.IG_ENV_FILE = previous;
+  assert.equal(code, 2);
+  assert.match(out.text(), /^ig: missing/m);
+  assert.match(out.text(), /\/ig-setup/);
+  assert.doesNotMatch(out.text(), /^ {4}at /m);
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(repo, { recursive: true, force: true });
+});
+
 test("no repo above the cwd is a run-level failure", async () => {
   const empty = mkdtempSync(path.join(os.tmpdir(), "ig-empty-"));
   const out = capture();
