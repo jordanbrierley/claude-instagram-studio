@@ -130,6 +130,27 @@ test("a non-JSON error body redacts the access token from the thrown message", a
   );
 });
 
+test("a secret straddling the 300-character truncation is still fully redacted", async () => {
+  const LEAKY_TOKEN = "leaky-token-do-not-print";
+  // Placed so the token's own bytes start just under the 300-char cut and run past
+  // it: the exact case the old redact(text.slice(0, 300)) missed, because the sliced
+  // text held only a partial, non-matching fragment of the full secret string.
+  const fetchImpl = async (url) => {
+    const prefixLen = url.indexOf(LEAKY_TOKEN);
+    const filler = "x".repeat(Math.max(0, 300 - prefixLen - 10));
+    return { ok: false, status: 502, text: async () => `${filler}${url}` };
+  };
+  const c = createGraphClient({ fetch: fetchImpl, userId: "17841400000000000", accessToken: LEAKY_TOKEN, sleep: noSleep });
+  await assert.rejects(
+    () => c.getPermalink("media-1"),
+    (err) => {
+      assert.equal(err.message.includes(LEAKY_TOKEN.slice(0, 8)), false);
+      assert.match(err.message, /\[redacted\]/);
+      return true;
+    },
+  );
+});
+
 test("exchangeToken redacts the client secret from a non-JSON error body too", async () => {
   const APP_SECRET = "leaky-app-secret-do-not-print";
   const fetchImpl = async (url) => ({
