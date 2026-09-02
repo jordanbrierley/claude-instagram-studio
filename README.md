@@ -12,7 +12,7 @@ Clone the repo, then add it as a local marketplace:
     /plugin marketplace add /absolute/path/to/instagram-studio
     /plugin install instagram-studio@jordanbrierley-instagram
 
-Once the repo is published on GitHub, `/plugin marketplace add jordanbrierley/instagram-studio` does
+Once the repo is published on GitHub, `/plugin marketplace add jordanbrierley/claude-instagram-studio` does
 the same thing without a clone.
 
 Restart Claude Code once so the SessionStart bootstrap can install the engine dependencies into the
