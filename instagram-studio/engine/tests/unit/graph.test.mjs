@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createGraphClient, exchangeToken, refreshToken, needsRefresh } from "../../lib/graph.mjs";
+import { createGraphClient, exchangeToken, refreshToken, adoptToken, needsRefresh } from "../../lib/graph.mjs";
 import { makeFakeGraph, noSleep } from "../helpers/fake-graph.mjs";
 
 // A distinctive token: the leak assertion below has to fail on a real leak and not
@@ -110,6 +110,15 @@ test("token exchange and refresh return the token and an exact expiry from the i
   assert.equal(refreshed.accessToken, "refreshed-token");
   assert.equal(refreshed.expiresAt, "2026-11-01T12:00:00.000Z");
   assert.equal(fake.calls[1].params.grant_type, "ig_refresh_token");
+});
+
+test("token adopt proves the token with /me and dates 60 days from the injected clock", async () => {
+  const fake = makeFakeGraph();
+  const nowMs = Date.parse("2026-09-02T12:00:00.000Z");
+  const adopted = await adoptToken({ fetch: fake.fetchImpl, accessToken: TOKEN, now: () => nowMs });
+  assert.equal(fake.calls[0].path, "/me");
+  assert.equal(fake.calls[0].params.access_token, TOKEN);
+  assert.deepEqual(adopted, { accessToken: TOKEN, expiresAt: "2026-11-01T12:00:00.000Z", userId: "17841400000000000", username: "fake" });
 });
 
 test("a non-JSON error body redacts the access token from the thrown message", async () => {

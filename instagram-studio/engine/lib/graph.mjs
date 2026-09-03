@@ -113,6 +113,17 @@ export async function refreshToken({ fetch: fetchImpl = fetch, baseUrl = GRAPH_B
   });
 }
 
+// A token from the App Dashboard's "Generate token" button is already long-lived, and the
+// exchange endpoint rejects it with "Failed to decode". Prove it works with /me and record
+// the 60 days Meta documents for dashboard tokens, counted from now.
+// ponytail: graph.instagram.com has no debug_token, so the clock starts at adoption, not
+// generation. Adopt straight after generating; the 10 day refresh window absorbs the rest.
+export const DASHBOARD_TOKEN_SECONDS = 60 * 24 * 60 * 60;
+export async function adoptToken({ fetch: fetchImpl = fetch, baseUrl = GRAPH_BASE, accessToken, now = () => Date.now() }) {
+  const me = await request({ fetchImpl, baseUrl, method: "GET", pathname: "/me", params: { fields: "user_id,username", access_token: accessToken } });
+  return { accessToken, expiresAt: expiryFrom(DASHBOARD_TOKEN_SECONDS, now()), userId: String(me.user_id), username: me.username };
+}
+
 // Instagram only honours a long-lived refresh once the token is at least 24 hours old.
 // There is no separate guard for that here and none is needed: this fires only inside
 // the last 10 days of a 60 day token, so any token it refreshes is 50 days old. A token

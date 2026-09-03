@@ -31,6 +31,7 @@ export function makeFakeGraph({ statusSequence = ["FINISHED"], failOn = null, pe
       return json({ status_code: code, status: `status is ${code}` });
     }
     if (method === "GET" && entry.params.fields === "permalink") return json({ permalink });
+    if (method === "GET" && parsed.pathname === "/me") return json({ user_id: "17841400000000000", username: "fake" });
     if (parsed.pathname === "/access_token") return json({ access_token: "long-lived-token", expires_in: 5184000 });
     if (parsed.pathname === "/refresh_access_token") return json({ access_token: "refreshed-token", expires_in: 5184000 });
     return json({ error: { message: `unexpected ${method} ${parsed.pathname}` } }, 500);
