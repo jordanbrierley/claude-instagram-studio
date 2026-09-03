@@ -24,9 +24,10 @@ Then run `/ig-setup` and follow it.
 
 - macOS with launchd (the scheduler is a LaunchAgent), and a Mac that sleeps rather than shuts down.
 - Node 22.18.0 or newer.
-- An Instagram Creator or Business account, and a Meta app with the "Instagram API with Instagram
-  Login" product, with your account added as an Instagram Tester.
-- A Vercel Blob store. Media is uploaded there while Instagram fetches it, then deleted.
+- An Instagram Creator or Business account, and a Meta app with the "Manage messaging & content on
+  Instagram" use case, your account added as an Instagram Tester, and the
+  `instagram_business_content_publish` permission added to the use case.
+- A public Vercel Blob store. Media is uploaded there while Instagram fetches it, then deleted.
 - Optional: `ffmpeg` for `ffprobe`, which turns on the video duration, aspect ratio and codec checks.
 
 ## What lands in your repo
@@ -77,7 +78,7 @@ Under the hood everything is one CLI:
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" due
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" validate [<post-dir>]
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" publish [--now <post-dir>] [--dry-run]
-    node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" token status | exchange | refresh
+    node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" token status | adopt | exchange | refresh
     node "${CLAUDE_PLUGIN_DATA}/engine/ig.mjs" launchd [--label <label>] [--log-dir <dir>] [--node <path>]
 
 `${CLAUDE_PLUGIN_DATA}` is set inside Claude Code sessions and hooks, not in a login shell, so these
@@ -87,8 +88,10 @@ from a terminal.
 
 Global options are `--repo <dir>` to specify the repo holding `instagram/config.json` (defaults to the nearest directory above the current directory containing it) and `--json` for machine-readable output on `due` and `validate`. Exit codes are 0 for success (per-post failures are recorded, not fatal), 1 when `validate` finds an invalid post, and 2 when the run cannot start (no repo, bad config, or missing secrets).
 
-`token exchange` takes no argument: it reads the short-lived token out of the secrets file and writes
-the long-lived one back, so no token is ever typed on a command line. `token status` prints the
+`token adopt` takes no argument: it reads the token the App Dashboard issued out of the secrets file,
+checks it against the API and records its 60 day expiry. `token exchange` is the same for a one-hour
+short-lived token from a Business Login flow, swapping it for the long-lived one. No token is ever
+typed on a command line. `token status` prints the
 expiry, never the token. `due` prints the engine path it is running from, which is the quickest way
 to spot a stale LaunchAgent pointing at an old plugin data directory.
 
