@@ -10,7 +10,7 @@ import {
 } from "./lib/config.mjs";
 import { findPosts, readPost, readLog, selectCandidates, zonedParts } from "./lib/queue.mjs";
 import { validateAll, validatePost, postKind, makeFfprobe } from "./lib/validate.mjs";
-import { createGraphClient, exchangeToken, refreshToken, needsRefresh } from "./lib/graph.mjs";
+import { createGraphClient, exchangeToken, refreshToken, adoptToken, needsRefresh } from "./lib/graph.mjs";
 import { createBlobStore, loadVercelBlob } from "./lib/blob.mjs";
 import { runPublish } from "./lib/publish.mjs";
 import { renderPlist, DEFAULT_LABEL } from "./lib/launchd.mjs";
@@ -22,7 +22,8 @@ const USAGE = `Usage: ig <command> [options]
   due                                      what would publish right now, no side effects
   publish [--now <post-dir>] [--dry-run]   publish everything due
   validate [<post-dir>]                    check the queue against the contract
-  token status | exchange | refresh        exchange reads the short-lived token from the secrets file
+  token status | adopt | exchange | refresh   adopt keeps a long-lived dashboard token, exchange swaps a
+                                           short-lived one; both read it from the secrets file
   launchd [--label <label>] [--log-dir <dir>] [--node <path>]   print the LaunchAgent plist
 
 Options:
@@ -219,17 +220,42 @@ async function cmdToken(values, positionals, io) {
     // No argument by design: the short-lived token is read from the secrets file the
     // user wrote, so it never appears on a command line or in `ps`.
     needSecrets(env, EXCHANGE_KEYS);
-    const result = await exchangeToken({ appSecret: env.IG_APP_SECRET, shortLivedToken: env.IG_ACCESS_TOKEN });
+    let result;
+    try {
+      result = await exchangeToken({ appSecret: env.IG_APP_SECRET, shortLivedToken: env.IG_ACCESS_TOKEN });
+    } catch (err) {
+      // "Failed to decode" is the exchange endpoint refusing a token that is already
+      // long-lived, which is what the App Dashboard's "Generate token" button hands out.
+      if (/Failed to decode/.test(err.message)) throw new RunError(`${err.message}. That is Instagram refusing a token that is already long-lived: run \`ig token adopt\` instead.`);
+      throw new RunError(err.message);
+    }
+    persistToken(result, envPath(), io);
+    return 0;
+  }
+  if (action === "adopt") {
+    needSecrets(env, REFRESH_KEYS);
+    let result;
+    try {
+      result = await adoptToken({ accessToken: env.IG_ACCESS_TOKEN });
+    } catch (err) {
+      // "Failed to decode" is a stray character, "Failed to decrypt" a truncated paste.
+      throw new RunError(`${err.message}. Instagram could not read the token: copy it again from the dashboard's Generate token dialog with its copy button and rewrite the IG_ACCESS_TOKEN line.`);
+    }
+    if (env.IG_USER_ID && env.IG_USER_ID !== result.userId) {
+      throw new RunError(`token belongs to @${result.username} (${result.userId}) but IG_USER_ID is ${env.IG_USER_ID}. Fix one of them in ${envPath()}.`);
+    }
+    io.log(`token works for @${result.username} (${result.userId})`);
     persistToken(result, envPath(), io);
     return 0;
   }
   if (action === "refresh") {
     needSecrets(env, REFRESH_KEYS);
-    const result = await refreshToken({ accessToken: env.IG_ACCESS_TOKEN });
+    let result;
+    try { result = await refreshToken({ accessToken: env.IG_ACCESS_TOKEN }); } catch (err) { throw new RunError(err.message); }
     persistToken(result, envPath(), io);
     return 0;
   }
-  throw new RunError(`unknown token action "${action}", expected status, exchange or refresh`);
+  throw new RunError(`unknown token action "${action}", expected status, adopt, exchange or refresh`);
 }
 
 async function cmdLaunchd(values, io) {
